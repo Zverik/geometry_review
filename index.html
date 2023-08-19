@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>Geometry Review Tool</title>
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+            html, body, #reviewing, #map_cont { height: 100%; }
+            #map { height: 95%; margin-right: 300px; }
+            #orders { float: right; width: 290px; height: 100%; overflow: scroll; }
+            #cycle_cont { left: 10px; top: 85px; }
+            #reviewing, #loaded, #load_error, #rloaded, #rload_error { display: none; }
+            .load_error { color: red; }
+            .msg { font-size: 90%; }
+            .desc { max-width: 700px; }
+        </style>
+    </head>
+    <body>
+        <div id="settingup">
+            <h1>Geometry Review Tool</h1>
+            <p class="desc">This page is for reviewing geometries one by one. You prepare a JSON file for it with features to review, and specify options to choose for each feature.
+            The result can be exported to a text file, with which you can resume your review if you stop part-way.
+            There is no server; all the data is stored on your machine locally.</p>
+            <p>File to review: <input type="file" id="source"> (json array, each object with "id", "title" (html allowed), and "geometries" array of geojsons)</p>
+            <p class="msg" id="loaded">Loaded <span id="loaded_count">0</span> features to review.</p>
+            <p class="msg load_error" id="load_error">Error loading data file: <span id="load_error_msg"></span></p>
+            <p>Saved review results: <input type="file" id="last_results"> (optional)</p>
+            <p class="msg" id="rloaded">Marked <span id="rloaded_count">0</span> features as reviewed.</p>
+            <p class="msg load_error" id="rload_error">Error loading review file: <span id="rload_error_msg"></span></p>
+            <p>Options: <input type="text" id="options" value="Good,Bad"> (comma or space-separated)</p>
+            <button id="start_review" disabled>Start</button>
+        </div>
+        <div id="reviewing">
+            <div>
+                <button id="prev" title="Previous order">&lt;&lt;</button>
+                <button id="uprev" title="Previous unreviewed">?&lt;</button>
+                <button id="unext" title="Next unreviewed">&gt;?</button>
+                <button id="next" title="Next order">&gt;&gt;</button>
+                <span id="counts"></span>
+                <span id="buttons"></span>
+                <span id="order"></span>
+            </div>
+            <div id="map_cont">
+                <div id="orders">
+                    <p>
+                        <button id="copy_orders">Copy to clipboard</button>
+                        <button id="download_orders">Download</button>
+                    </p>
+                    <div id="orders_list"></div>
+                </div>
+                <div id="map">
+                    <span id="cycle_cont" class="leaflet-bar leaflet-control"><a href="#" id="cycle" title="Cycle visible layers">🔄</a></span>
+                </div>
+            </div>
+        </div>
+        <script>
+            var orders = [], lastResults = new Map(), map, geoms, geomLayers, options, oButtons, oOrders, idx;
+
+            document.getElementById('source').addEventListener('change', (e) => {
+                let reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        let data = JSON.parse(ev.target.result);
+                        if (data.length > 1) {
+                            orders = data;
+                            document.getElementById('loaded_count').innerText = '' + orders.length;
+                            document.getElementById('loaded').style.display = 'block';
+                            document.getElementById('load_error').style.display = 'none';
+                            document.getElementById('start_review').disabled = false;
+                        } else {
+                            document.getElementById('load_error_msg').innerText = 'Less than 2 items in the array';
+                            document.getElementById('load_error').style.display = 'block';
+                        }
+                    } catch (err) {
+                        document.getElementById('load_error_msg').innerText = err.message;
+                        document.getElementById('load_error').style.display = 'block';
+                    }
+                }
+                reader.readAsText(e.target.files[0]);
+            });
+
+            document.getElementById('last_results').addEventListener('change', (e) => {
+                let reader = new FileReader();
+                reader.onload = (ev) => {
+                    lastResults = new Map();
+                    let lines = ev.target.result.split('\n');
+                    let opts = [];
+                    for (let line = 0; line < lines.length; line++) {
+                        if (lines[line].startsWith('#')) {
+                            let opt = lines[line].substring(1).trim();
+                            if (opt.length > 0) opts.push(opt);
+                        } else {
+                            let fid = lines[line].trim();
+                            if (fid.length > 0 && opts.length > 0) {
+                                lastResults.set(fid, opts[opts.length - 1]);
+                            }
+                        }
+                    }
+                    if (lastResults.size > 0) {
+                        document.getElementById('rloaded_count').innerText = '' + lastResults.size;
+                        document.getElementById('rloaded').style.display = 'block';
+                        document.getElementById('rload_error').style.display = 'none';
+                        document.getElementById('options').value = opts.join(',');
+                    } else {
+                        document.getElementById('rload_error_msg').innerText = 'No reviews found';
+                        document.getElementById('rload_error').style.display = 'block';
+                    }
+                }
+                reader.readAsText(e.target.files[0]);
+            });
+
+            document.getElementById('start_review').addEventListener('click', () => startReview());
+            document.getElementById('start_review').disabled = true;
+
+            function startReview() {
+                document.getElementById('settingup').style.display = 'none';
+                document.getElementById('reviewing').style.display = 'block';
+
+                options = document.getElementById('options').value.split(/[\s,]+/).filter((v) => v.length > 0);
+                if (options.length < 2) options = ['Good', 'Bad'];
+                // options = ['Лучше', 'Обрезан', 'Сломано', 'Хуже'];
+                oOrders = options.map(() => new Set());
+
+                lastResults.forEach((result, f) => {
+                    let i = orders.findIndex((o) => o.id == f);
+                    let j = options.findIndex((o) => o == result);
+                    if (i >= 0 && j >= 0) oOrders[j].add(i);
+                });
+
+                map = L.map('map').setView([60, 30], 10);
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                geoms = null;
+                geomLayers = null;
+                idx = 0;
+
+                oButtons = [];
+                for (let i = 0; i < options.length; i++) {
+                    var btn = document.createElement('button');
+                    btn.innerText = options[i];
+                    btn.title = 'Mark as "' + options[i] + '" (also key ' + (i+1) + ')';
+                    btn.addEventListener('click', () => {
+                        for (let j = 0; j < oOrders.length; j++) {
+                            if (i == j) oOrders[j].add(idx);
+                            else oOrders[j].delete(idx);
+                        }
+                        updateLists();
+                        nextOrder(1);
+                    });
+                    oButtons[i] = btn;
+                    document.getElementById('buttons').appendChild(btn);
+                };
+
+                change(0);
+                updateLists();
+
+                document.getElementById('prev' ).addEventListener('click', () => nextOrder(-1));
+                document.getElementById('uprev').addEventListener('click', () => nextUnreviewedOrder(-1));
+                document.getElementById('next' ).addEventListener('click', () => nextOrder(1));
+                document.getElementById('unext').addEventListener('click', () => nextUnreviewedOrder(1));
+                document.getElementById('cycle').addEventListener('click', cycleLayers);
+
+                document.addEventListener('keydown', (e) => {
+                    if (e.defaultPrevented) return;
+                    if (e.key.length == 1 && e.key >= '1' && e.key <= '9') {
+                        const i = parseInt(e.key);
+                        if (i <= options.length) {
+                            oButtons[i-1].click();
+                            e.preventDefault();
+                        }
+                    }
+                });
+
+                document.getElementById('copy_orders').addEventListener('click', () => {
+                    navigator.clipboard.writeText(makeReviewText());
+                });
+
+                document.getElementById('download_orders').addEventListener('click', () => {
+                    // Based on https://stackoverflow.com/q/3665115
+                    const blob = new Blob([makeReviewText()], {type: 'text/plain'});
+                    const filename = 'reviewed.txt';
+
+                    if (typeof navigator.msSaveBlob !== 'undefined') {
+                        navigator.msSaveBlob(blob, filename);
+                    } else {
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.style.display = 'none';
+                        link.href = url;
+                        link.setAttribute('download', filename);
+                        document.body.appendChild(link);
+                        link.click();
+                        setTimeout(function() {
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                        }, 200);
+                    }
+                });
+            }
+
+            function makeReviewText() {
+                let lines = '';
+                for (let i = 0; i < options.length; i++) {
+                    if (lines.length > 0) lines += '\n';
+                    lines += '# ' + options[i] + '\n\n';
+                    if (oOrders[i].size > 0) {
+                        oOrders[i].forEach((v) => {
+                            lines += orders[v].id + '\n';
+                        });
+                    }
+                }
+                return lines;
+            }
+
+            function updateButtons() {
+                for (let j = 0; j < options.length; j++) {
+                    let text = options[j] + ' ' + oOrders[j].size;
+                    if (oOrders[j].has(idx)) text = '<b>' + text + '</b>';
+                    oButtons[j].innerHTML  = text;
+                }
+            }
+
+            function updateLists() {
+                let sorted = [];
+                for (let i = 0; i < options.length; i++) sorted.push(i);
+                sorted.sort((a, b) => oOrders[a].size - oOrders[b].size);
+                let lines = '';
+                sorted.forEach((i) => {
+                    if (oOrders[i].size > 0) {
+                        lines += '<h2>' + options[i] + '</h2><ul>';
+                        oOrders[i].forEach((v) => {
+                            lines += '<li><a href="#" onclick="return change(' + v + ')">' + orders[v].id + '</a></li>';
+                        });
+                        lines += '</ul>';
+                    }
+                });
+                document.getElementById('orders_list').innerHTML = lines;
+            }
+
+            function nextOrder(diff) {
+                change(idx + diff);
+            }
+
+            function nextUnreviewedOrder(diff) {
+                var i = idx + diff;
+                while (i >= 0 && i < orders.length && oOrders.some((s) => s.has(i))) i += diff;
+                change(i);
+            }
+
+            function cycleLayers() {
+                if (!geomLayers) return;
+                geoms.clearLayers();
+                geomLayers.push(geomLayers.shift());
+                geomLayers.forEach((l) => geoms.addLayer(l));
+                return false;
+            }
+
+            function change(newIdx) {
+                if (newIdx < 0) return;
+                if (newIdx >= orders.length) return;
+                idx = newIdx;
+                document.getElementById('prev').disabled = idx <= 0;
+                document.getElementById('next').disabled = idx >= orders.length - 1;
+                updateButtons();
+                document.getElementById('counts').innerText = '(' + (idx + 1) + '/' + orders.length + ')';
+                document.getElementById('order').innerHTML = orders[idx].title.trim();
+                const colors = ['blue', 'black', 'red', 'green', 'darkred', 'brown'];
+                geomLayers = [];
+                for (let i = 0; i < orders[idx].geometries.length; i++) {
+                    geomLayers.push(L.geoJson(orders[idx].geometries[i], {
+                        style: (f) => ({color: colors[i % colors.length]})
+                    }));
+                }
+                if (geoms) map.removeLayer(geoms);
+                geoms = L.featureGroup(geomLayers).addTo(map);
+                map.fitBounds(geoms.getBounds());
+                return false;
+            }
+        </script>
+    </body>
+</html>
