@@ -267,7 +267,11 @@
                 document.getElementById('next').disabled = idx >= orders.length - 1;
                 updateButtons();
                 document.getElementById('counts').innerText = '(' + (idx + 1) + '/' + orders.length + ')';
-                document.getElementById('order').innerHTML = orders[idx].title.trim();
+                let title = orders[idx]['title'] || orders[idx].id;
+                if (title.includes('<a')) {
+                    title = title.replace(/<a ([^>]+>)/, (m, m1) => m.includes('_blank') ? '' : '<a target="_blank" ' + m1);
+                }
+                document.getElementById('order').innerHTML = title.trim();
                 const colors = ['blue', 'black', 'red', 'green', 'darkred', 'brown'];
                 geomLayers = [];
                 for (let i = 0; i < orders[idx].geometries.length; i++) {
