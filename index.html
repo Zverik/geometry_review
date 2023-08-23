@@ -174,8 +174,10 @@
                         }
                     } else if (e.key == 'ArrowLeft') {
                         nextUnreviewedOrder(-1);
+                        e.preventDefault();
                     } else if (e.key == 'ArrowRight') {
                         nextUnreviewedOrder(1);
+                        e.preventDefault();
                     }
                 });
 
