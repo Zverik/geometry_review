@@ -297,7 +297,17 @@
                                 text: (f.properties ? '' + f.properties.icon : null) || ' '
                             };
                             return L.marker(latlng, {icon: L.BeautifyIcon.icon(iconOptions)});
-                        }
+                        },
+                        onEachFeature: (f, layer) => {
+                            if (f.properties) {
+                                let t = '';
+                                for (const p in f.properties) {
+                                    if (p == 'icon' || p == 'dash') continue;
+                                    t = t + '<div><b>' + p + ':</b> ' + f.properties[p] + '</div>';
+                                }
+                                if (t.length > 0) layer.bindTooltip(t);
+                            }
+                        },
                     }));
                 }
                 if (geoms) map.removeLayer(geoms);
