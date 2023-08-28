@@ -50,6 +50,7 @@
                         <button id="copy_orders">Copy to clipboard</button>
                         <button id="download_orders">Download</button>
                     </p>
+                    <p><form onsubmit="return false"><input type="text" id="search"><input type="submit" id="do_search" value="Search"></form></p>
                     <div id="orders_list"></div>
                 </div>
                 <div id="map">
@@ -164,9 +165,12 @@
                 document.getElementById('next' ).addEventListener('click', () => nextOrder(1));
                 document.getElementById('unext').addEventListener('click', () => nextUnreviewedOrder(1));
                 document.getElementById('cycle').addEventListener('click', cycleLayers);
+                document.getElementById('search').value = '';
+                document.getElementById('do_search').addEventListener('click', search);
 
                 document.addEventListener('keydown', (e) => {
                     if (e.defaultPrevented) return;
+                    if (e.target.tagName.toLowerCase() == 'input') return;
                     if (e.key.length == 1 && e.key >= '1' && e.key <= '9') {
                         const i = parseInt(e.key);
                         if (i <= options.length) {
@@ -248,6 +252,24 @@
                 document.getElementById('orders_list').innerHTML = lines;
             }
 
+            function search() {
+                v = document.getElementById('search').value.trim().toLowerCase();
+                if (v.length == 0) return;
+                for (let i = 0; i < orders.length; i++) {
+                    if (orders[i].id.toLowerCase().includes(v)) {
+                        change(i);
+                        return false;
+                    }
+                }
+                for (let i = 0; i < orders.length; i++) {
+                    if (orders[i].title && orders[i].title.toLowerCase().includes(v)) {
+                        change(i);
+                        return false;
+                    }
+                }
+                return false;
+            }
+
             function nextOrder(diff) {
                 change(idx + diff);
             }
@@ -282,6 +304,7 @@
                 const colors = ['#4169e1', '#0f0f0f', '#dc143c', '#228b22', '#8a2be2', '#2f4f4f'];
                 geomLayers = [];
                 for (let i = 0; i < orders[idx].geometries.length; i++) {
+                    if (!orders[idx].geometries[i]) continue;
                     geomLayers.push(L.geoJson(orders[idx].geometries[i], {
                         style: (f) => ({
                             color: colors[i % colors.length],
