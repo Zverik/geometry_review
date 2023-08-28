@@ -17,7 +17,11 @@ I know, it's hard to prepare an input file without an example.
     "id": "first",
     "title": "First object, <b>a point</b>",
     "geometries": [
-      {"type": "Point", "coordinates": [10.56, 18.23]}
+      {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [10.56, 18.23]},
+        "properties": {"icon": 1}
+      }
     ]
   },
   {
@@ -31,12 +35,15 @@ I know, it's hard to prepare an input file without an example.
 ]
 ```
 
-Note that points are not painted with differently colored markers for now (I'm lazy, pull
-requests welcome), but lines and polygons are. Yes, you can have links in titles, but
-keep them short. Titles are optional actually. Geometries can be GeoJSON features or geometries,
-or even FeatureCollections.
+Note that geometries (including markers for points) are colored in blue, black, red etc.
+Use `dash: true` in GeoJSON feature properties to display a line dashed, and
+`icon: 'A'` to display a text ("A" in this case) on a marker.
+Yes, you can have links in titles, but keep them short. Titles are optional actually.
+Geometries can be GeoJSON features or geometries, or even FeatureCollections.
 
 ## Author and License
 
 Written by Ilya Zverev, published under MIT license.
 
+Includes Muhammad Arslan Sajid's [BeautifyMarker](https://github.com/masajid390/BeautifyMarker),
+also published under MIT license.

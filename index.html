@@ -5,7 +5,9 @@
         <title>Geometry Review Tool</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+        <link rel="stylesheet" href="leaflet-beautify-marker-icon.css">
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="leaflet-beautify-marker-icon.js"></script>
         <style>
             html, body, #reviewing, #map_cont { height: 100%; }
             #map { height: 95%; margin-right: 300px; }
@@ -120,7 +122,6 @@
 
                 options = document.getElementById('options').value.split(/[\s,]+/).filter((v) => v.length > 0);
                 if (options.length < 2) options = ['Good', 'Bad'];
-                // options = ['Лучше', 'Обрезан', 'Сломано', 'Хуже'];
                 oOrders = options.map(() => new Set());
 
                 lastResults.forEach((result, f) => {
@@ -278,11 +279,25 @@
                     title = title.replace(/<a ([^>]+>)/, (m, m1) => m.includes('_blank') ? '' : '<a target="_blank" ' + m1);
                 }
                 document.getElementById('order').innerHTML = title.trim();
-                const colors = ['blue', 'black', 'red', 'green', 'darkred', 'brown'];
+                const colors = ['#4169e1', '#0f0f0f', '#dc143c', '#228b22', '#8a2be2', '#2f4f4f'];
                 geomLayers = [];
                 for (let i = 0; i < orders[idx].geometries.length; i++) {
                     geomLayers.push(L.geoJson(orders[idx].geometries[i], {
-                        style: (f) => ({color: colors[i % colors.length]})
+                        style: (f) => ({
+                            color: colors[i % colors.length],
+                            dashArray: (f.properties && f.properties.dash) ? '4 3' : null
+                        }),
+                        pointToLayer: (f, latlng) => {
+                            iconOptions = {
+                                iconShape: 'marker',
+                                isAlphaNumericIcon: f.properties && f.properties.icon && ('' + f.properties.icon).length <= 2,
+                                borderColor: colors[i],
+                                backgroundColor: colors[i] + 'a7',
+                                textColor: 'white',
+                                text: (f.properties ? '' + f.properties.icon : null) || ' '
+                            };
+                            return L.marker(latlng, {icon: L.BeautifyIcon.icon(iconOptions)});
+                        }
                     }));
                 }
                 if (geoms) map.removeLayer(geoms);
