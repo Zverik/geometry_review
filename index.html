@@ -255,6 +255,7 @@
             function search() {
                 v = document.getElementById('search').value.trim().toLowerCase();
                 if (v.length == 0) return;
+                document.getElementById('search').value = '';
                 for (let i = 0; i < orders.length; i++) {
                     if (orders[i].id.toLowerCase().includes(v)) {
                         change(i);
