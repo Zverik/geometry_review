@@ -66,14 +66,14 @@
                 reader.onload = (ev) => {
                     try {
                         let data = JSON.parse(ev.target.result);
-                        if (data.length > 1) {
+                        if (data.length > 0) {
                             orders = data;
                             document.getElementById('loaded_count').innerText = '' + orders.length;
                             document.getElementById('loaded').style.display = 'block';
                             document.getElementById('load_error').style.display = 'none';
                             document.getElementById('start_review').disabled = false;
                         } else {
-                            document.getElementById('load_error_msg').innerText = 'Less than 2 items in the array';
+                            document.getElementById('load_error_msg').innerText = 'No items in the array';
                             document.getElementById('load_error').style.display = 'block';
                         }
                     } catch (err) {
